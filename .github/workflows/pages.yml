@@ -22,6 +22,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 커밋 수로 버전 번호를 매기기 위해 전체 기록 필요
 
       # API 키는 저장소에 두지 않고 배포 시점에 Secret으로 config.js 생성
       - name: Build site
@@ -32,6 +34,11 @@ jobs:
           cp -r index.html sw.js manifest.webmanifest icons _site/
           printf "window.HOMETUBE_CONFIG = { youtubeApiKey: '%s' };\n" "$YT_API_KEY" > _site/config.js
           touch _site/.nojekyll
+          VER="v1.$(git rev-list --count HEAD)"
+          BUILT="$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+          SHA="$(git rev-parse --short HEAD)"
+          sed -i "s|const APP_VERSION = { ver: 'dev', built: '', sha: '' };|const APP_VERSION = { ver: '$VER', built: '$BUILT', sha: '$SHA' };|" _site/index.html
+          grep -q "ver: '$VER'" _site/index.html   # 치환 실패 시 배포 중단
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

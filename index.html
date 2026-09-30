@@ -55,6 +55,10 @@
   }
   header h1 { font-size: 16px; margin: 0; flex: 1; letter-spacing: -.01em; }
   header h1 b { color: var(--accent); }
+  .ver {
+    font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+    padding: 1px 8px; margin-left: 6px; vertical-align: 2px; cursor: pointer; font-variant-numeric: tabular-nums;
+  }
 
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; height: calc(100% - 53px); }
   .stage { padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
@@ -247,7 +251,7 @@
 </head>
 <body>
 <header>
-  <h1><b>●</b> 홈트 루틴 플레이어</h1>
+  <h1><b>●</b> 홈트 루틴 플레이어<span class="ver" id="ver" title="버전 정보"></span></h1>
   <button id="btnInstall" hidden title="홈 화면에 앱으로 설치">📲<span class="txt"> 설치</span></button>
   <button id="btnDual" title="운동 영상 옆에 음악·타이머 영상 띄우기">⧉<span class="txt"> 보조 화면</span></button>
   <button id="btnShare" title="루틴 공유 링크 복사">🔗<span class="txt"> 공유 링크</span></button>
@@ -384,6 +388,7 @@
 
 <dialog id="settings">
   <h3>⚙ 설정</h3>
+  <p id="verFull" style="margin-top:0"></p>
   <label class="hint" for="apiKey">YouTube Data API 키</label>
   <input type="password" id="apiKey" style="width:100%" autocomplete="off" placeholder="AIza...">
   <p>검색과 챕터 자동 분할에 쓰여요. 이 브라우저에만 저장돼요.<br>
@@ -401,6 +406,13 @@
 <script src="config.js"></script>
 <script>
 const $ = s => document.querySelector(s);
+// 배포 워크플로가 이 줄을 실제 버전으로 바꿔 넣는다 (로컬은 dev)
+const APP_VERSION = { ver: 'dev', built: '', sha: '' };
+$('#ver').textContent = APP_VERSION.ver;
+$('#verFull').textContent = APP_VERSION.sha
+  ? `버전 ${APP_VERSION.ver} · ${APP_VERSION.built} 배포 · ${APP_VERSION.sha}`
+  : '로컬 개발 버전';
+$('#ver').onclick = () => toast($('#verFull').textContent);
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
