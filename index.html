@@ -194,6 +194,15 @@
   dialog h3 { margin: 0 0 10px; font-size: 16px; }
   dialog p { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
   dialog .row { margin-top: 12px; justify-content: flex-end; }
+  dialog { max-height: calc(100dvh - 32px); overflow: auto; }
+  .help details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+  .help summary { font-weight: 700; cursor: pointer; }
+  .help ol { margin: 8px 0 0; padding-left: 20px; }
+  .help li { margin: 5px 0; }
+  .help b { color: var(--accent); }
+  .help code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+  .help .status { margin: 8px 0 0; font-size: 13px; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 12px; min-height: 0; align-self: flex-start; }
 
   /* ---------- 모바일 ---------- */
   @media (max-width: 900px), (max-height: 520px) and (pointer: coarse) {
@@ -349,6 +358,7 @@
         <input type="url" id="addUrl" placeholder="유튜브 링크 (t= 시간 포함 가능)" autocomplete="off">
         <button id="btnPaste" title="클립보드에서 붙여넣기">📋</button>
       </div>
+      <button class="linkbtn" id="openShareHelp">📲 유튜브 앱에서 "공유"로 바로 넣는 법</button>
       <div class="link-preview" id="linkPreview" hidden>
         <img alt="">
         <div class="lp-text"><div class="t"></div><div class="c"></div></div>
@@ -386,9 +396,47 @@
   </aside>
 </main>
 
+<dialog id="shareHelp" class="help">
+  <h3>📲 유튜브 앱에서 공유로 넣기</h3>
+  <details id="helpAndroid">
+    <summary>안드로이드</summary>
+    <ol>
+      <li><b>크롬</b>으로 이 사이트를 열고 <b>앱으로 설치</b>하세요.<br>
+          (상단 📲 설치 버튼, 또는 크롬 메뉴 ⋮ → <b>홈 화면에 추가</b> / <b>앱 설치</b>)</li>
+      <li>유튜브 앱에서 영상 → <b>공유</b> → 목록에서 <b>홈트루틴</b>을 고르세요.<br>
+          안 보이면 목록 끝의 <b>더보기</b>에서 찾을 수 있어요.</li>
+      <li>이 앱이 열리면서 링크가 채워져요. 시작·끝 시간을 정하고 <b>+ 추가</b>.</li>
+    </ol>
+    <p class="status" id="installStatus"></p>
+    <button class="primary" id="helpInstall" hidden>📲 지금 설치하기</button>
+  </details>
+  <details id="helpIos">
+    <summary>아이폰</summary>
+    <p class="hint">아이폰은 웹앱을 공유 목록에 직접 넣을 수 없어서 아래 방법 중 하나를 써요.</p>
+    <p><b>방법 1. 링크 복사 (가장 간단)</b></p>
+    <ol>
+      <li>유튜브 앱에서 <b>공유 → 링크 복사</b></li>
+      <li>이 앱에서 <b>+ 구간 추가 → 📋</b> 버튼</li>
+    </ol>
+    <p><b>방법 2. 단축어로 공유 목록에 추가</b> (Safari에서 쓸 때)</p>
+    <ol>
+      <li><b>단축어</b> 앱 → <b>+</b> 로 새 단축어</li>
+      <li>상단 ⓘ(또는 ⌄) → <b>공유 시트에서 보기</b> 켜기</li>
+      <li>동작 추가: <b>URL 인코딩</b> (입력: <i>단축어 입력</i>)</li>
+      <li>동작 추가: <b>URL</b> → 아래 주소를 붙여넣고 끝에 <i>URL 인코딩된 텍스트</i> 변수 넣기<br>
+          <code id="shortcutUrl"></code> <button class="linkbtn" id="copyShortcutUrl">복사</button></li>
+      <li>동작 추가: <b>URL 열기</b> → 이름을 <b>홈트루틴에 추가</b>로 저장</li>
+      <li>유튜브 앱 → <b>공유 → 더보기</b> → <b>홈트루틴에 추가</b></li>
+    </ol>
+    <p class="hint">⚠ 아이폰은 홈 화면에 설치한 앱과 Safari의 저장 공간이 달라요. 단축어는 Safari로 열리니, 루틴도 Safari에서 관리하세요.</p>
+  </details>
+  <div class="row"><button id="shareHelpClose">닫기</button></div>
+</dialog>
+
 <dialog id="settings">
   <h3>⚙ 설정</h3>
   <p id="verFull" style="margin-top:0"></p>
+  <button id="openShareHelp2" style="width:100%;margin-bottom:12px">📲 유튜브 앱에서 공유로 넣는 법</button>
   <label class="hint" for="apiKey">YouTube Data API 키</label>
   <input type="password" id="apiKey" style="width:100%" autocomplete="off" placeholder="AIza...">
   <p>검색과 챕터 자동 분할에 쓰여요. 이 브라우저에만 저장돼요.<br>
@@ -460,6 +508,9 @@ async function fetchTitle(vid) {
 let toastTimer;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  // 모달 다이얼로그는 최상위 레이어라 그 안으로 옮겨야 토스트가 보인다
+  const d = document.querySelector('dialog[open]') || document.body;
+  if (t.parentNode !== d) d.appendChild(t);
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
@@ -1149,10 +1200,42 @@ $('#btnPaste').onclick = async () => {
 
 let installEvt = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#btnInstall').hidden = false; });
-$('#btnInstall').onclick = async () => {
+async function promptInstall() {
   if (!installEvt) return;
-  installEvt.prompt(); await installEvt.userChoice.catch(() => {});
+  installEvt.prompt();
+  const choice = await installEvt.userChoice.catch(() => null);
   installEvt = null; $('#btnInstall').hidden = true;
+  if (choice?.outcome === 'accepted') toast('설치됐어요! 이제 유튜브 공유 목록에 "홈트루틴"이 보여요');
+  renderShareHelp();
+}
+$('#btnInstall').onclick = promptInstall;
+addEventListener('appinstalled', () => { installEvt = null; $('#btnInstall').hidden = true; renderShareHelp(); });
+
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function renderShareHelp() {
+  const st = $('#installStatus');
+  if (isStandalone()) st.textContent = '✅ 지금 설치된 앱으로 보고 있어요. 유튜브 공유 목록에서 "홈트루틴"을 찾으세요.';
+  else if (installEvt) st.textContent = '아직 설치 전이에요. 아래 버튼으로 바로 설치할 수 있어요.';
+  else st.textContent = '설치 버튼이 안 보이면 크롬 메뉴 ⋮ → "홈 화면에 추가"를 쓰세요.';
+  $('#helpInstall').hidden = !installEvt || isStandalone();
+  $('#shortcutUrl').textContent = location.origin + location.pathname + '?text=';
+}
+function openShareHelp() {
+  renderShareHelp();
+  // 사용 중인 기기 쪽 안내를 펼쳐서 보여준다
+  $('#helpIos').open = isIOS();
+  $('#helpAndroid').open = !isIOS();
+  if ($('#settings').open) $('#settings').close();
+  $('#shareHelp').showModal();
+}
+$('#openShareHelp').onclick = openShareHelp;
+$('#openShareHelp2').onclick = openShareHelp;
+$('#shareHelpClose').onclick = () => $('#shareHelp').close();
+$('#helpInstall').onclick = promptInstall;
+$('#copyShortcutUrl').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#shortcutUrl').textContent); toast('주소를 복사했어요'); }
+  catch { toast('주소를 길게 눌러 복사하세요'); }
 };
 
 $('#btnDual').onclick = () => {
@@ -1229,6 +1312,7 @@ document.addEventListener('keydown', e => {
     history.replaceState(null, '', location.pathname);
     $('#addUrl').value = sharedUrl; $('#addUrl').dispatchEvent(new Event('input'));
     setTimeout(openSheet, 100);
+    toast('공유받은 영상이에요. 시간을 정하고 + 추가를 누르세요');
   }
   renderSaved(); renderList();
   if (store.get('hometube.mirror', false)) toggleMirror();
