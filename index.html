@@ -880,7 +880,7 @@ function buildQueue() {
 function startRoutine(fromItem = 0) {
   if (!items.length) { toast('먼저 구간을 추가하세요'); return; }
   if (!p1Ready) { toast('플레이어 준비 중… 잠시 후 다시 눌러주세요'); return; }
-  mode = 'routine'; workSec = 0;
+  mode = 'routine'; workSec = 0; previewIdx = -1;
   buildQueue();
   $('#doneOverlay').hidden = true;
   goto(queue.findIndex(q => q.type === 'video' && q.idx === fromItem));
@@ -938,10 +938,12 @@ function finish() {
   qi = -1; renderList(); updateNow();
 }
 
+let previewIdx = -1;
 function preview(i) {
   if (!p1Ready) { toast('플레이어 준비 중…'); return; }
   const it = items[i];
-  mode = 'preview'; stopRest(); $('#doneOverlay').hidden = true;
+  if (!it) return;
+  mode = 'preview'; previewIdx = i; stopRest(); $('#doneOverlay').hidden = true;
   p1.loadVideoById({ videoId: it.vid, startSeconds: it.start || 0 });
   renderList();
 }
@@ -1011,15 +1013,31 @@ function togglePlay() {
   if (mode === 'idle' && qi < 0 && currentVid() == null) { startRoutine(0); return; }
   p1.getPlayerState() === YT.PlayerState.PLAYING ? p1.pauseVideo() : p1.playVideo();
 }
+// 루틴 중: 운동 구간 단위로 이동(휴식은 건너뜀). 루틴 밖: 구간 목록을 미리보기로 이동
 function prev() {
-  if (mode !== 'routine') return;
+  if (!items.length || !p1Ready) return;
+  if (mode !== 'routine') {
+    const i = previewIdx;
+    const t = i >= 0 ? p1.getCurrentTime() - (items[i].start || 0) : 0;
+    preview(i > 0 && t <= 3 ? i - 1 : Math.max(i, 0));
+    return;
+  }
   const cur = queue[qi];
   // 영상 재생 3초 이후면 현재 구간 처음으로, 아니면 이전 영상 구간으로
   if (cur?.type === 'video' && p1.getCurrentTime() - (items[cur.idx].start || 0) > 3) { goto(qi); return; }
   for (let j = qi - 1; j >= 0; j--) if (queue[j].type === 'video') { goto(j); return; }
   goto(qi);
 }
-function next() { if (mode === 'routine') goto(qi + 1); }
+function next() {
+  if (!items.length || !p1Ready) return;
+  if (mode !== 'routine') {
+    if (previewIdx >= items.length - 1) { toast('마지막 구간이에요'); return; }
+    preview(previewIdx + 1);
+    return;
+  }
+  const j = queue.findIndex((q, k) => k > qi && q.type === 'video');
+  j < 0 ? finish() : goto(j);
+}
 function toggleMirror() {
   const on = $('#mainWrap').classList.toggle('mirror');
   $('#btnMirror').classList.toggle('on', on);
@@ -1162,7 +1180,8 @@ $('#btnShare').onclick = async () => {
 document.addEventListener('keydown', e => {
   if (e.target.matches('input, select, textarea')) return;
   const k = e.key.toLowerCase();
-  if (k === ' ') { e.preventDefault(); togglePlay(); }
+  // 버튼에 포커스가 남아 있으면 Space가 그 버튼까지 눌러 두 번 동작하므로 포커스를 뺀다
+  if (k === ' ') { e.preventDefault(); if (e.target.matches('button')) e.target.blur(); togglePlay(); }
   else if (k === 'n') next();
   else if (k === 'p') prev();
   else if (k === 'm') toggleMirror();
