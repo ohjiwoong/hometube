@@ -118,6 +118,17 @@
   .item .acts button { padding: 3px 8px; font-size: 12px; }
   .item .acts .spacer { flex: 1; }
   .empty { color: var(--muted); text-align: center; padding: 24px 8px; border: 1px dashed var(--line); border-radius: 10px; }
+  .bulk {
+    display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 6px; align-items: center;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px;
+  }
+  .bulk[hidden] { display: none; }
+  .bulk label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .bulk input { width: 100%; min-width: 48px; }
+  .bulk button { padding: 5px 10px; }
+  .bulk #btnClear { grid-column: 1 / -1; }
+  button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); background: transparent; }
+  button.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
   .total { display: flex; justify-content: space-between; color: var(--muted); }
   .total b { color: var(--text); font-variant-numeric: tabular-nums; }
   .start { padding: 12px; font-size: 16px; }
@@ -357,6 +368,13 @@
 
     <div class="box">
       <h2>루틴 순서</h2>
+      <div class="bulk" id="bulk" hidden>
+        <label>모든 휴식<input type="number" id="bulkRest" min="0" placeholder="초" inputmode="numeric"></label>
+        <button id="bulkRestApply">적용</button>
+        <label>모든 세트<input type="number" id="bulkSets" min="1" placeholder="회" inputmode="numeric"></label>
+        <button id="bulkSetsApply">적용</button>
+        <button class="danger" id="btnClear">🗑 전체 삭제</button>
+      </div>
       <div class="list" id="list"></div>
       <div class="total"><span>예상 총 시간</span><b id="total">0:00</b></div>
       <button class="primary start" id="btnStart">▶ 루틴 시작</button>
@@ -437,7 +455,7 @@ function toast(msg) {
 let items = []; // {vid, label, start, end, sets, rest, dur}
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-function saveDraft() { store.set('hometube.draft', items); }
+function saveDraft() { clearedItems = null; store.set('hometube.draft', items); }
 function segLen(it) {
   const end = it.end ?? it.dur;
   return end == null ? null : Math.max(0, end - (it.start || 0));
@@ -455,6 +473,37 @@ function renderTotal() {
 }
 
 const openItems = new WeakSet();
+let clearedItems = null;   // 전체 삭제 되돌리기용
+
+function stopRoutine() {
+  if (mode !== 'routine') return;
+  mode = 'idle'; stopRest(); qi = -1;
+  try { p1.pauseVideo(); } catch {}
+}
+function bulkApply(key) {
+  const inp = $(key === 'rest' ? '#bulkRest' : '#bulkSets');
+  const n = parseInt(inp.value);
+  if (Number.isNaN(n) || n < (key === 'rest' ? 0 : 1)) { toast(key === 'rest' ? '휴식 시간(초)을 입력하세요' : '세트 수를 입력하세요'); return; }
+  items.forEach(it => it[key] = n);
+  inp.value = '';
+  // 진행 중인 루틴은 새 값으로 큐를 다시 만들고 현재 구간 위치를 유지
+  if (mode === 'routine' && queue[qi]) {
+    const { idx, set, type } = queue[qi];
+    buildQueue();
+    const j = queue.findIndex(q => q.idx === idx && q.set === Math.min(set, items[idx].sets) && q.type === type);
+    qi = j >= 0 ? j : queue.findIndex(q => q.idx === idx);
+  }
+  saveDraft(); renderList();
+  toast(key === 'rest' ? `모든 휴식을 ${n}초로 바꿨어요` : `모든 구간을 ${n}세트로 바꿨어요`);
+}
+function clearAll() {
+  if (!items.length) return;
+  if (!confirm(`루틴의 구간 ${items.length}개를 모두 삭제할까요?`)) return;
+  stopRoutine();
+  const old = items; items = [];
+  saveDraft(); clearedItems = old;
+  renderList(); updateNow();
+}
 function summary(it) {
   const end = it.end != null ? fmt(it.end) : it.dur ? fmt(it.dur) : '끝';
   return `${fmt(it.start || 0)}–${end}` + (it.sets > 1 ? ` · ${it.sets}세트` : '') + (it.rest ? ` · 휴식 ${it.rest}초` : '');
@@ -462,8 +511,16 @@ function summary(it) {
 function renderList() {
   const list = $('#list');
   list.innerHTML = '';
+  $('#bulk').hidden = !items.length;
   if (!items.length) {
     list.innerHTML = '<div class="empty">아직 구간이 없어요.<br>위에서 유튜브 링크를 추가하세요.</div>';
+    if (clearedItems) {
+      const b = document.createElement('button');
+      b.textContent = `↩ 삭제한 ${clearedItems.length}개 되돌리기`;
+      b.style.marginTop = '10px';
+      b.onclick = () => { items = clearedItems; saveDraft(); renderList(); };
+      list.firstChild.append(document.createElement('br'), b);
+    }
   }
   const cur = mode === 'routine' && queue[qi] ? queue[qi].idx : -1;
   items.forEach((it, i) => {
@@ -988,6 +1045,11 @@ $('#restSkip').onclick = () => goto(qi + 1);
 $('#restAdd').onclick = () => { restEndAt += 10000; tickRest(); };
 $('#doneAgain').onclick = () => startRoutine(0);
 $('#btnStart').onclick = () => startRoutine(0);
+$('#bulkRestApply').onclick = () => bulkApply('rest');
+$('#bulkSetsApply').onclick = () => bulkApply('sets');
+$('#bulkRest').addEventListener('keydown', e => { if (e.key === 'Enter') bulkApply('rest'); });
+$('#bulkSets').addEventListener('keydown', e => { if (e.key === 'Enter') bulkApply('sets'); });
+$('#btnClear').onclick = clearAll;
 $('#btnAdd').onclick = addItem;
 ['#addUrl', '#addLabel', '#addStart', '#addEnd'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); }));
 let chTimer;
