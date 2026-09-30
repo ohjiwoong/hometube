@@ -489,7 +489,7 @@ let clearedItems = null;   // 전체 삭제 되돌리기용
 
 function stopRoutine() {
   if (mode !== 'routine') return;
-  mode = 'idle'; stopRest(); qi = -1;
+  mode = 'idle'; stopRest(); qi = -1; releaseWake();
   try { p1.pauseVideo(); } catch {}
 }
 function bulkApply(key) {
@@ -833,6 +833,17 @@ let restEndAt = 0, restTimer = null, lastBeep = null;
 let workSec = 0, lastTick = 0;
 let rate = 1, wakeLock = null;
 
+// 화면 꺼짐 방지. 브라우저는 앱 전환·화면 끔 때 이를 자동 해제하므로 돌아오면 다시 요청한다
+async function acquireWake() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  if (wakeLock && !wakeLock.released) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+}
+function releaseWake() { try { wakeLock?.release(); } catch {} wakeLock = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && mode === 'routine') acquireWake();
+});
+
 window.onYouTubeIframeAPIReady = () => {
   const vars = { playsinline: 1, rel: 0, modestbranding: 1 };
   p1 = new YT.Player('player1', {
@@ -896,7 +907,7 @@ function startRoutine(fromItem = 0) {
   buildQueue();
   $('#doneOverlay').hidden = true;
   goto(queue.findIndex(q => q.type === 'video' && q.idx === fromItem));
-  try { navigator.wakeLock?.request('screen').then(l => wakeLock = l).catch(() => {}); } catch {}
+  acquireWake();
 }
 
 function goto(n) {
@@ -946,7 +957,7 @@ function finish() {
   $('#doneText').textContent = `실제 운동 시간 ${fmt(workSec)} · 수고하셨어요!`;
   $('#doneOverlay').hidden = false;
   beep(880, .2); setTimeout(() => beep(1175, .4), 220);
-  try { wakeLock?.release(); } catch {} wakeLock = null;
+  releaseWake();
   qi = -1; renderList(); updateNow();
 }
 
