@@ -1,0 +1,39 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # API 키는 저장소에 두지 않고 배포 시점에 Secret으로 config.js 생성
+      - name: Build site
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+        run: |
+          mkdir _site
+          cp -r index.html sw.js manifest.webmanifest icons _site/
+          printf "window.HOMETUBE_CONFIG = { youtubeApiKey: '%s' };\n" "$YT_API_KEY" > _site/config.js
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4

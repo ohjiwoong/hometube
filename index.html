@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="홈트루틴">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>홈트 루틴 플레이어</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --card: #1e222b;
+    --line: #2a2f3a;
+    --text: #e8eaf0;
+    --muted: #8b92a3;
+    --accent: #c6f432;
+    --accent-ink: #151a05;
+    --danger: #ff5d5d;
+    --rest: #3fb6ff;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: #3d4452; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  button.ghost { background: transparent; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  input, select {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=range] { padding: 0; accent-color: var(--accent); }
+
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 16px; margin: 0; flex: 1; letter-spacing: -.01em; }
+  header h1 b { color: var(--accent); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; height: calc(100% - 53px); }
+  .stage { padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+  .panel { border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .players { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .players.dual { grid-template-columns: 2fr 1fr; align-items: start; }
+  .pwrap { position: relative; aspect-ratio: 16/9; background: #000; border-radius: var(--radius); overflow: hidden; }
+  .pwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .pwrap.mirror iframe { transform: scaleX(-1); }
+  .placeholder {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: var(--muted); padding: 20px; pointer-events: none;
+  }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; background: rgba(8, 20, 32, .92); text-align: center; padding: 16px;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay .tag { color: var(--rest); font-weight: 700; letter-spacing: .2em; }
+  .overlay .big { font-size: clamp(56px, 12vw, 140px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .overlay .next { color: var(--muted); }
+  .overlay .next b { color: var(--text); }
+  .overlay .row { display: flex; gap: 8px; }
+  .overlay.done .tag { color: var(--accent); }
+
+  .nowbar { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+  .nowbar .top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .nowbar .title { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nowbar .meta { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+  .bar.overall { height: 3px; margin-top: 6px; }
+  .bar.overall > i { background: var(--muted); }
+
+  .controls, .subctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .controls .sep { width: 1px; height: 22px; background: var(--line); }
+  .controls label, .subctl label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .subctl { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .subctl input[type=text] { flex: 1; min-width: 180px; }
+  .hint { color: var(--muted); font-size: 12px; }
+  kbd { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 11px; }
+
+  .panel h2 { font-size: 13px; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .box { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > input, .row > select { flex: 1; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .grid4 label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
+  .grid4 input { width: 100%; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .item.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .item .head { display: flex; gap: 8px; align-items: center; }
+  .item img { width: 72px; height: 40px; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
+  .item .num { font-weight: 800; color: var(--muted); width: 18px; text-align: center; flex: none; }
+  .item .lbl { flex: 1; background: transparent; border-color: transparent; font-weight: 600; }
+  .item .lbl:hover { border-color: var(--line); }
+  .item .acts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .item .acts button { padding: 3px 8px; font-size: 12px; }
+  .item .acts .spacer { flex: 1; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 8px; border: 1px dashed var(--line); border-radius: 10px; }
+  .total { display: flex; justify-content: space-between; color: var(--muted); }
+  .total b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .start { padding: 12px; font-size: 16px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: #fff; color: #111; padding: 10px 16px; border-radius: 10px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: .2s; z-index: 20; max-width: calc(100% - 32px);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+
+  .item .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .item .sum { font-size: 12px; color: var(--muted); padding-left: 9px; font-variant-numeric: tabular-nums; }
+  .item .tog { display: none; }
+  .url-row { display: flex; gap: 8px; }
+  .url-row input { flex: 1; }
+  .sheet-head { display: none; }
+  .fab, #sheetBackdrop { display: none; }
+  .tap-hint {
+    position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
+    background: var(--accent); color: var(--accent-ink); font-weight: 800; padding: 10px 18px; border-radius: 999px;
+    pointer-events: none; animation: pulse 1.2s ease-in-out infinite; white-space: nowrap;
+  }
+  .tap-hint[hidden] { display: none; }
+  @keyframes pulse { 50% { transform: translateX(-50%) scale(1.06); } }
+  #btnInstall[hidden] { display: none; }
+
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { flex: 1; }
+  .results { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; }
+  .results:empty { display: none; }
+  .result { display: flex; gap: 10px; padding: 6px; border-radius: 8px; cursor: pointer; align-items: flex-start; }
+  .result:hover { background: var(--card); }
+  .result img { width: 104px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
+  .result .t { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .result .c { color: var(--muted); font-size: 12px; }
+  .or { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .link-preview { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .link-preview[hidden] { display: none; }
+  .link-preview img { width: 128px; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
+  .link-preview .lp-text { flex: 1; min-width: 0; }
+  .link-preview .t { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .link-preview .c { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .link-preview button { flex: none; align-self: flex-start; padding: 2px 8px; }
+  .chapters { background: var(--card); border: 1px solid var(--accent); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .chapters[hidden] { display: none; }
+  .chapters .row { justify-content: space-between; }
+  .chapters .row button { padding: 3px 10px; font-size: 12px; min-height: 0; }
+  #chList { display: flex; flex-direction: column; max-height: 220px; overflow: auto; }
+  #chList label { display: flex; gap: 8px; align-items: center; padding: 4px 2px; cursor: pointer; }
+  #chList input { accent-color: var(--accent); width: 18px; height: 18px; min-height: 0; flex: none; }
+  #chList .tm { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; margin-left: auto; white-space: nowrap; }
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; width: min(440px, calc(100% - 32px));
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h3 { margin: 0 0 10px; font-size: 16px; }
+  dialog p { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+  dialog .row { margin-top: 12px; justify-content: flex-end; }
+
+  /* ---------- 모바일 ---------- */
+  @media (max-width: 900px), (max-height: 520px) and (pointer: coarse) {
+    input, select { font-size: 16px; }               /* iOS 입력 시 자동 확대 방지 */
+    button { min-height: 40px; }
+    header { padding: calc(8px + env(safe-area-inset-top)) 12px 8px; gap: 8px; }
+    header h1 { font-size: 15px; }
+    header .txt { display: none; }
+    .layout { display: block; height: auto; }
+    .stage { padding: 0; gap: 0; overflow: visible; }
+    .players { position: sticky; top: 0; z-index: 6; background: #000; gap: 0; }
+    .players.dual { grid-template-columns: 2fr 1fr; align-items: center; }
+    .pwrap { border-radius: 0; }
+    .nowbar { border-radius: 0; border-width: 0 0 1px; }
+    .controls { padding: 10px 12px; gap: 6px; }
+    .controls button { min-width: 48px; min-height: 48px; font-size: 18px; }
+    .controls #btnPlay { flex: 1; }
+    .controls .sep, .controls .vol, .hint { display: none; }
+    .controls select { min-height: 48px; }
+    .subctl { margin: 0 12px 10px; }
+    .panel { border-left: 0; border-top: 1px solid var(--line); padding: 16px 12px calc(96px + env(safe-area-inset-bottom)); }
+
+    .item .head { cursor: pointer; }
+    .item .tog { display: block; min-width: 40px; background: transparent; border: 0; color: var(--muted); font-size: 16px; }
+    .item.open .tog { transform: rotate(180deg); }
+    .item:not(.open) .grid4, .item:not(.open) .acts { display: none; }
+    .item .acts button { min-height: 36px; padding: 4px 10px; }
+
+    .fab {
+      display: block; position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 8;
+      padding: 14px 20px; border-radius: 999px; font-size: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+    }
+    #sheetBackdrop.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9; }
+    .sheet {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--panel);
+      max-height: 88vh; max-height: 88dvh; overflow: auto;
+      border-radius: 18px 18px 0 0; border-top: 1px solid var(--line);
+      padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+      transform: translateY(105%); transition: transform .25s ease; visibility: hidden;
+    }
+    .sheet.open { transform: none; visibility: visible; }
+    .sheet h2 { display: none; }
+    .sheet-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; }
+    .sheet #btnAdd { padding: 12px; font-size: 16px; }
+  }
+
+  /* 폰을 가로로 돌리면 영상이 화면을 꽉 채움 */
+  @media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+    header { display: none; }
+    .players { position: relative; height: 100vh; height: 100dvh; }
+    .players .pwrap { height: 100%; aspect-ratio: auto; }
+    .fab { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>●</b> 홈트 루틴 플레이어</h1>
+  <button id="btnInstall" hidden title="홈 화면에 앱으로 설치">📲<span class="txt"> 설치</span></button>
+  <button id="btnDual" title="운동 영상 옆에 음악·타이머 영상 띄우기">⧉<span class="txt"> 보조 화면</span></button>
+  <button id="btnShare" title="루틴 공유 링크 복사">🔗<span class="txt"> 공유 링크</span></button>
+  <button id="btnSettings" title="설정">⚙</button>
+</header>
+
+<main class="layout">
+  <section class="stage" id="stage">
+    <div class="players" id="players">
+      <div class="pwrap" id="mainWrap">
+        <div class="placeholder" id="placeholder">오른쪽에서 유튜브 링크를 추가하고<br><b>▶ 루틴 시작</b>을 누르세요</div>
+        <div id="player1"></div>
+        <div class="tap-hint" id="tapHint" hidden>👆 영상을 탭해서 계속</div>
+        <div class="overlay" id="restOverlay" hidden>
+          <div class="tag">REST</div>
+          <div class="big" id="restNum">30</div>
+          <div class="next" id="restNext"></div>
+          <div class="row">
+            <button id="restAdd">+10초</button>
+            <button class="primary" id="restSkip">건너뛰기 ▶</button>
+          </div>
+        </div>
+        <div class="overlay done" id="doneOverlay" hidden>
+          <div class="tag">COMPLETE</div>
+          <div class="big">🎉</div>
+          <div class="next" id="doneText"></div>
+          <div class="row"><button class="primary" id="doneAgain">다시 하기</button></div>
+        </div>
+      </div>
+      <div class="pwrap" id="subWrap" hidden>
+        <div class="placeholder">보조 화면: 아래에 링크를 넣으세요<br>(음악, 타이머, 다른 운동 영상 등)</div>
+        <div id="player2"></div>
+      </div>
+    </div>
+
+    <div class="nowbar">
+      <div class="top">
+        <div class="title" id="nowTitle">대기 중</div>
+        <div class="meta" id="nowMeta"></div>
+      </div>
+      <div class="bar"><i id="segBar"></i></div>
+      <div class="bar overall"><i id="allBar"></i></div>
+    </div>
+
+    <div class="controls">
+      <button id="btnPrev" title="이전 구간 (P)">⏮</button>
+      <button id="btnPlay" class="primary" title="재생/일시정지 (Space)">▶</button>
+      <button id="btnNext" title="다음 구간 (N)">⏭</button>
+      <span class="sep"></span>
+      <label>속도
+        <select id="rate">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+        </select>
+      </label>
+      <button id="btnMirror" title="좌우 반전 (M)">⇋ 거울</button>
+      <label class="vol">🔊 <input type="range" id="vol1" min="0" max="100" value="100"></label>
+      <button id="btnFull" title="전체 화면 (F)">⛶</button>
+    </div>
+
+    <div class="subctl" id="subCtl" hidden>
+      <input type="text" id="subUrl" placeholder="보조 화면 유튜브 링크">
+      <button id="subLoad">불러오기</button>
+      <label>🔊 <input type="range" id="vol2" min="0" max="100" value="60"></label>
+      <button id="subLoop" class="on">🔁 반복</button>
+      <button id="subPlay">⏯</button>
+    </div>
+
+    <div class="hint">단축키: <kbd>Space</kbd> 재생/정지 · <kbd>N</kbd> 다음 · <kbd>P</kbd> 이전 · <kbd>M</kbd> 거울 · <kbd>F</kbd> 전체화면</div>
+  </section>
+
+  <aside class="panel">
+    <div class="box">
+      <h2>저장된 루틴</h2>
+      <div class="row">
+        <select id="savedSel"><option value="">— 불러오기 —</option></select>
+        <button id="btnDel" title="선택한 루틴 삭제">🗑</button>
+      </div>
+      <div class="row">
+        <input type="text" id="routineName" placeholder="루틴 이름 (예: 월요일 하체)">
+        <button id="btnSave">저장</button>
+      </div>
+    </div>
+
+    <div class="box sheet" id="addSheet">
+      <div class="sheet-head"><span>구간 추가</span><button class="ghost" id="sheetClose">✕</button></div>
+      <h2>구간 추가</h2>
+      <div class="search-row">
+        <input type="search" id="q" placeholder="유튜브 검색 (예: 하체 홈트 10분)" enterkeyhint="search">
+        <button id="btnSearch">🔍</button>
+      </div>
+      <div class="results" id="results"></div>
+      <div class="or">또는 링크</div>
+      <div class="url-row">
+        <input type="url" id="addUrl" placeholder="유튜브 링크 (t= 시간 포함 가능)" autocomplete="off">
+        <button id="btnPaste" title="클립보드에서 붙여넣기">📋</button>
+      </div>
+      <div class="link-preview" id="linkPreview" hidden>
+        <img alt="">
+        <div class="lp-text"><div class="t"></div><div class="c"></div></div>
+        <button class="ghost" id="lpClear" title="링크 지우기">✕</button>
+      </div>
+      <div class="chapters" id="chapters" hidden>
+        <div class="row"><b id="chTitle">챕터</b><button id="chToggle">전체 해제</button></div>
+        <div id="chList"></div>
+        <button class="primary" id="chAdd">선택한 챕터를 각각 구간으로 추가</button>
+        <div class="hint">세트·휴식은 아래 값이 모든 챕터에 적용돼요</div>
+      </div>
+      <input type="text" id="addLabel" placeholder="이름 (비워두면 영상 제목)">
+      <div class="grid4">
+        <label>시작<input type="text" id="addStart" placeholder="0:00"></label>
+        <label>끝<input type="text" id="addEnd" placeholder="끝까지"></label>
+        <label>세트<input type="number" id="addSets" min="1" value="1"></label>
+        <label>휴식(초)<input type="number" id="addRest" min="0" value="20"></label>
+      </div>
+      <button class="primary" id="btnAdd">+ 추가</button>
+    </div>
+
+    <div class="box">
+      <h2>루틴 순서</h2>
+      <div class="list" id="list"></div>
+      <div class="total"><span>예상 총 시간</span><b id="total">0:00</b></div>
+      <button class="primary start" id="btnStart">▶ 루틴 시작</button>
+    </div>
+  </aside>
+</main>
+
+<dialog id="settings">
+  <h3>⚙ 설정</h3>
+  <label class="hint" for="apiKey">YouTube Data API 키</label>
+  <input type="password" id="apiKey" style="width:100%" autocomplete="off" placeholder="AIza...">
+  <p>검색과 챕터 자동 분할에 쓰여요. 이 브라우저에만 저장돼요.<br>
+     비워 두면 <code>config.js</code>의 키를 사용해요.</p>
+  <div class="row">
+    <button id="apiTest">연결 테스트</button>
+    <button class="primary" id="apiSave">저장</button>
+    <button id="apiClose">닫기</button>
+  </div>
+</dialog>
+<button class="fab primary" id="fab">+ 구간 추가</button>
+<div id="sheetBackdrop"></div>
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+/* ---------- 시간/URL 유틸 ---------- */
+function fmt(s) {
+  s = Math.max(0, Math.round(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0');
+}
+function parseTime(str) {
+  str = String(str ?? '').trim();
+  if (!str) return null;
+  if (/^\d+(\.\d+)?$/.test(str)) return +str;
+  if (/^(\d+h)?(\d+m)?(\d+s)?$/.test(str)) {
+    const m = str.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+    return (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+  }
+  const parts = str.split(':').map(Number);
+  if (parts.some(n => isNaN(n))) return NaN;
+  return parts.reduce((a, b) => a * 60 + b, 0);
+}
+function parseYouTube(input) {
+  input = input.trim();
+  if (/^[\w-]{11}$/.test(input)) return { vid: input, t: null };
+  let u;
+  try { u = new URL(input.includes('://') ? input : 'https://' + input); } catch { return null; }
+  let vid = null;
+  if (u.hostname.endsWith('youtu.be')) vid = u.pathname.slice(1, 12);
+  else if (u.searchParams.get('v')) vid = u.searchParams.get('v');
+  else { const m = u.pathname.match(/\/(shorts|embed|live|v)\/([\w-]{11})/); if (m) vid = m[2]; }
+  if (!vid || !/^[\w-]{11}$/.test(vid)) return null;
+  const t = u.searchParams.get('t') || u.searchParams.get('start');
+  return { vid, t: t ? parseTime(t) : null };
+}
+const thumb = vid => `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+async function fetchTitle(vid) {
+  const url = encodeURIComponent('https://www.youtube.com/watch?v=' + vid);
+  for (const ep of [`https://www.youtube.com/oembed?format=json&url=${url}`, `https://noembed.com/embed?url=${url}`]) {
+    try { const r = await fetch(ep); if (r.ok) { const j = await r.json(); if (j.title) return j.title; } } catch {}
+  }
+  return null;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------- 루틴 데이터 ---------- */
+let items = []; // {vid, label, start, end, sets, rest, dur}
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function saveDraft() { store.set('hometube.draft', items); }
+function segLen(it) {
+  const end = it.end ?? it.dur;
+  return end == null ? null : Math.max(0, end - (it.start || 0));
+}
+function renderTotal() {
+  let sum = 0, unknown = false;
+  items.forEach((it, i) => {
+    const len = segLen(it);
+    if (len == null) unknown = true; else sum += len * it.sets;
+    const rests = i === items.length - 1 ? it.sets - 1 : it.sets;
+    sum += (it.rest || 0) * rests;
+  });
+  $('#total').textContent = fmt(sum) + (unknown ? ' + α' : '');
+  $('#total').title = unknown ? '끝 시간이 없는 영상은 한 번 재생하면 길이가 계산됩니다' : '';
+}
+
+const openItems = new WeakSet();
+function summary(it) {
+  const end = it.end != null ? fmt(it.end) : it.dur ? fmt(it.dur) : '끝';
+  return `${fmt(it.start || 0)}–${end}` + (it.sets > 1 ? ` · ${it.sets}세트` : '') + (it.rest ? ` · 휴식 ${it.rest}초` : '');
+}
+function renderList() {
+  const list = $('#list');
+  list.innerHTML = '';
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">아직 구간이 없어요.<br>위에서 유튜브 링크를 추가하세요.</div>';
+  }
+  const cur = mode === 'routine' && queue[qi] ? queue[qi].idx : -1;
+  items.forEach((it, i) => {
+    const el = document.createElement('div');
+    el.className = 'item' + (i === cur ? ' current' : '') + (openItems.has(it) ? ' open' : '');
+    el.innerHTML = `
+      <div class="head">
+        <span class="num">${i + 1}</span>
+        <img src="${thumb(it.vid)}" alt="">
+        <div class="col">
+          <input class="lbl" value="">
+          <span class="sum">${summary(it)}</span>
+        </div>
+        <button class="tog" aria-label="펼치기">▾</button>
+      </div>
+      <div class="grid4">
+        <label>시작<input data-k="start" value="${it.start ? fmt(it.start) : ''}" placeholder="0:00"></label>
+        <label>끝<input data-k="end" value="${it.end != null ? fmt(it.end) : ''}" placeholder="${it.dur ? fmt(it.dur) : '끝까지'}"></label>
+        <label>세트<input data-k="sets" type="number" min="1" value="${it.sets}"></label>
+        <label>휴식(초)<input data-k="rest" type="number" min="0" value="${it.rest}"></label>
+      </div>
+      <div class="acts">
+        <button data-a="preview" title="이 영상을 열어 구간 확인">👁 미리보기</button>
+        <button data-a="setStart" title="현재 재생 위치를 시작으로">⏱ 시작</button>
+        <button data-a="setEnd" title="현재 재생 위치를 끝으로">⏱ 끝</button>
+        <button data-a="split" title="영상 챕터대로 여러 구간으로 나누기">✂ 챕터</button>
+        <span class="spacer"></span>
+        <button data-a="from" title="여기부터 루틴 시작">▶</button>
+        <button data-a="up" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button data-a="down" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
+        <button data-a="del">✕</button>
+      </div>`;
+    el.querySelector('.head').onclick = e => {
+      if (e.target.closest('.lbl')) return;
+      openItems.has(it) ? openItems.delete(it) : openItems.add(it);
+      el.classList.toggle('open');
+    };
+    const lbl = el.querySelector('.lbl');
+    lbl.value = it.label;
+    lbl.onchange = () => { it.label = lbl.value.trim() || it.label; saveDraft(); };
+    el.querySelectorAll('input[data-k]').forEach(inp => {
+      inp.onchange = () => {
+        const k = inp.dataset.k;
+        if (k === 'sets') it.sets = Math.max(1, parseInt(inp.value) || 1);
+        else if (k === 'rest') it.rest = Math.max(0, parseInt(inp.value) || 0);
+        else {
+          const v = parseTime(inp.value);
+          if (Number.isNaN(v)) { toast('시간 형식: 1:30 또는 90'); inp.value = ''; return; }
+          it[k] = k === 'start' ? (v || 0) : v;
+        }
+        saveDraft(); renderTotal();
+        el.querySelector('.sum').textContent = summary(it);
+      };
+    });
+    el.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => itemAction(b.dataset.a, i));
+    list.appendChild(el);
+  });
+  renderTotal();
+}
+
+function itemAction(a, i) {
+  const it = items[i];
+  if (a === 'up' || a === 'down') {
+    const j = a === 'up' ? i - 1 : i + 1;
+    [items[i], items[j]] = [items[j], items[i]];
+  } else if (a === 'del') {
+    items.splice(i, 1);
+  } else if (a === 'preview') {
+    preview(i); return;
+  } else if (a === 'from') {
+    startRoutine(i); return;
+  } else if (a === 'split') {
+    splitByChapters(i); return;
+  } else if (a === 'setStart' || a === 'setEnd') {
+    if (!p1 || currentVid() !== it.vid) { toast('먼저 👁 미리보기로 이 영상을 열어주세요'); return; }
+    const t = Math.floor(p1.getCurrentTime());
+    if (a === 'setStart') it.start = t; else it.end = t;
+    toast((a === 'setStart' ? '시작' : '끝') + ' = ' + fmt(t));
+  }
+  saveDraft(); renderList();
+}
+
+async function addItem() {
+  const parsed = parseYouTube($('#addUrl').value);
+  if (!parsed) { toast('유튜브 링크를 확인해주세요'); return; }
+  const start = parseTime($('#addStart').value) ?? parsed.t ?? 0;
+  const end = parseTime($('#addEnd').value);
+  if (Number.isNaN(start) || Number.isNaN(end)) { toast('시간 형식: 1:30 또는 90'); return; }
+  if (end != null && end <= start) { toast('끝 시간이 시작보다 늦어야 해요'); return; }
+  const it = {
+    vid: parsed.vid, label: $('#addLabel').value.trim() || '불러오는 중…',
+    start, end, sets: Math.max(1, parseInt($('#addSets').value) || 1),
+    rest: Math.max(0, parseInt($('#addRest').value) || 0), dur: null,
+  };
+  items.push(it);
+  ['#addUrl', '#addLabel', '#addStart', '#addEnd'].forEach(s => $(s).value = '');
+  renderLinkPreview(null);
+  saveDraft(); renderList(); closeSheet();
+  toast(`${items.length}번 구간 추가됨`);
+  if (!$('#addLabel').value && it.label === '불러오는 중…') {
+    const info = apiKey() ? await videoInfo(it.vid).catch(() => null) : null;
+    if (info) it.dur = info.dur;
+    it.label = info?.title || (await fetchTitle(it.vid)) || '영상 ' + items.length;
+    saveDraft(); renderList();
+  }
+}
+
+/* ---------- YouTube Data API: 검색 · 챕터 ---------- */
+const apiKey = () => store.get('hometube.apiKey', '') || window.HOMETUBE_CONFIG?.youtubeApiKey || '';
+async function yt(path, params) {
+  const key = apiKey();
+  if (!key) throw Object.assign(new Error('no key'), { code: 'nokey' });
+  const u = new URL('https://www.googleapis.com/youtube/v3/' + path);
+  Object.entries({ ...params, key }).forEach(([k, v]) => u.searchParams.set(k, v));
+  const r = await fetch(u);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = j.error || {};
+    throw Object.assign(new Error(e.message || r.status), { code: e.errors?.[0]?.reason || e.status || r.status });
+  }
+  return j;
+}
+function apiError(e) {
+  const msg = {
+    nokey: '⚙ 설정에서 API 키를 먼저 넣어주세요',
+    quotaExceeded: '오늘 무료 사용량을 다 썼어요 (한국시간 오후 4~5시 초기화)',
+    keyInvalid: 'API 키가 올바르지 않아요', badRequest: 'API 키가 올바르지 않아요',
+    forbidden: '키 제한 설정을 확인하세요 (허용 주소·허용 API)',
+    ipRefererBlocked: '이 주소는 키 허용 목록에 없어요. 키 제한에 현재 주소를 추가하세요',
+    accessNotConfigured: 'YouTube Data API v3가 사용 설정되지 않았어요',
+  }[e.code];
+  toast(msg || 'YouTube API 오류: ' + e.message);
+}
+const isoDur = s => { const m = String(s).match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/) || []; return (+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + (+m[3] || 0) * 60 + (+m[4] || 0); };
+
+// 영상 설명의 "0:00 워밍업" 같은 줄을 챕터로 해석 (유튜브 챕터 규칙: 오름차순 타임스탬프)
+function parseChapters(desc, dur) {
+  const out = [];
+  for (const line of String(desc).split(/\r?\n/)) {
+    // 줄 맨 앞("0:00 워밍업") 또는 맨 끝("워밍업 - 0:00")의 타임스탬프만 인정
+    const m = line.match(/^[\s\[(•·▶►\-]*((?:\d{1,2}:)?\d{1,2}:\d{2})[\])]?(?=$|[\s\-–—:|.])/)
+           || line.match(/(?:^|[\s\[(\-–—])((?:\d{1,2}:)?\d{1,2}:\d{2})[\])]?\s*$/);
+    if (!m) continue;
+    const t = parseTime(m[1]);
+    const title = line.replace(m[1], '').replace(/^[\s\[\]()\-–—:|.•·▶►]+|[\s\[\]()\-–—:|.]+$/g, '').trim();
+    if (out.length && t <= out[out.length - 1].t) continue;
+    if (dur && t >= dur) continue;
+    out.push({ t, title: title || `파트 ${out.length + 1}` });
+  }
+  if (out.length < 2) return [];
+  return out.map((c, i) => ({ ...c, end: i + 1 < out.length ? out[i + 1].t : (dur || null) }));
+}
+const infoCache = store.get('hometube.info', {});
+const infoInflight = {};
+function videoInfo(vid) {
+  if (infoCache[vid]) return Promise.resolve(infoCache[vid]);
+  return infoInflight[vid] ||= fetchVideoInfo(vid).finally(() => delete infoInflight[vid]);
+}
+async function fetchVideoInfo(vid) {
+  const j = await yt('videos', { part: 'snippet,contentDetails,status', id: vid });
+  const v = j.items?.[0];
+  if (!v) return null;
+  const dur = isoDur(v.contentDetails.duration);
+  const info = { title: v.snippet.title, dur, embeddable: v.status?.embeddable !== false, chapters: parseChapters(v.snippet.description, dur) };
+  const keys = Object.keys(infoCache);
+  if (keys.length > 200) delete infoCache[keys[0]];
+  infoCache[vid] = info; store.set('hometube.info', infoCache);
+  return info;
+}
+// 링크 입력 시 썸네일·제목 미리보기. 키가 있으면 API(캐시), 없으면 oEmbed로 제목만
+let lpVid = null;
+async function renderLinkPreview(p) {
+  const box = $('#linkPreview');
+  if (!p?.vid) { lpVid = null; box.hidden = true; return; }
+  if (p.vid === lpVid) return;
+  lpVid = p.vid;
+  box.querySelector('img').src = thumb(p.vid);
+  box.querySelector('.t').textContent = '불러오는 중…';
+  box.querySelector('.c').textContent = '';
+  box.hidden = false;
+  const info = apiKey() ? await videoInfo(p.vid).catch(() => null) : null;
+  const title = info?.title || await fetchTitle(p.vid);
+  if (lpVid !== p.vid) return;
+  box.querySelector('.t').textContent = title || '제목을 불러올 수 없어요';
+  box.querySelector('.c').textContent = [
+    info?.dur ? '길이 ' + fmt(info.dur) : '',
+    p.t ? fmt(p.t) + '부터' : '',
+    info && !info.embeddable ? '⚠ 퍼가기 차단 영상' : '',
+  ].filter(Boolean).join(' · ');
+}
+const decodeEntities = html => { const t = document.createElement('textarea'); t.innerHTML = html; return t.value; };
+
+async function search() {
+  const q = $('#q').value.trim();
+  if (!q) return;
+  const box = $('#results');
+  box.innerHTML = '<div class="hint" style="padding:8px">검색 중…</div>';
+  try {
+    const j = await yt('search', { part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: 12, q, regionCode: 'KR', relevanceLanguage: 'ko', safeSearch: 'moderate' });
+    const ids = j.items.map(x => x.id.videoId);
+    const durs = {};
+    if (ids.length) {
+      const d = await yt('videos', { part: 'contentDetails', id: ids.join(',') });
+      d.items.forEach(v => durs[v.id] = isoDur(v.contentDetails.duration));
+    }
+    box.innerHTML = ids.length ? '' : '<div class="hint" style="padding:8px">결과가 없어요</div>';
+    j.items.forEach(x => {
+      const vid = x.id.videoId, el = document.createElement('div');
+      el.className = 'result';
+      el.innerHTML = `<img src="${thumb(vid)}" alt="" loading="lazy"><div><div class="t"></div><div class="c"></div></div>`;
+      el.querySelector('.t').textContent = decodeEntities(x.snippet.title);
+      el.querySelector('.c').textContent = decodeEntities(x.snippet.channelTitle) + (durs[vid] ? ' · ' + fmt(durs[vid]) : '');
+      el.onclick = () => {
+        $('#addUrl').value = 'https://youtu.be/' + vid;
+        $('#addUrl').dispatchEvent(new Event('input'));
+        box.innerHTML = '';
+      };
+      box.appendChild(el);
+    });
+  } catch (e) { box.innerHTML = ''; apiError(e); }
+}
+
+let chVid = null, chData = [];
+async function showChapters(vid) {
+  chVid = vid; $('#chapters').hidden = true;
+  if (!vid || !apiKey()) return;
+  try {
+    const info = await videoInfo(vid);
+    if (chVid !== vid || !info) return;
+    if (!info.embeddable) toast('이 영상은 퍼가기가 막혀 있어 재생되지 않을 수 있어요');
+    chData = info.chapters;
+    if (!chData.length) return;
+    $('#chTitle').textContent = `📑 챕터 ${chData.length}개 발견`;
+    $('#chList').innerHTML = '';
+    chData.forEach((c, i) => {
+      const l = document.createElement('label');
+      l.innerHTML = `<input type="checkbox" checked data-i="${i}"><span></span><span class="tm">${fmt(c.t)}${c.end ? ' · ' + fmt(c.end - c.t) : ''}</span>`;
+      l.querySelector('span').textContent = c.title;
+      $('#chList').appendChild(l);
+    });
+    $('#chToggle').textContent = '전체 해제';
+    $('#chapters').hidden = false;
+  } catch (e) { apiError(e); }
+}
+function addChapters() {
+  const picked = [...$('#chList').querySelectorAll('input:checked')].map(x => chData[+x.dataset.i]);
+  if (!picked.length) { toast('챕터를 하나 이상 선택하세요'); return; }
+  const sets = Math.max(1, parseInt($('#addSets').value) || 1), rest = Math.max(0, parseInt($('#addRest').value) || 0);
+  const dur = infoCache[chVid]?.dur ?? null;
+  items.push(...picked.map(c => ({ vid: chVid, label: c.title, start: c.t, end: c.end, sets, rest, dur })));
+  ['#addUrl', '#addLabel', '#addStart', '#addEnd'].forEach(s => $(s).value = '');
+  renderLinkPreview(null);
+  $('#chapters').hidden = true; chVid = null;
+  saveDraft(); renderList(); closeSheet();
+  toast(`챕터 ${picked.length}개를 구간으로 추가했어요`);
+}
+async function splitByChapters(i) {
+  const it = items[i];
+  try {
+    const info = await videoInfo(it.vid);
+    const lo = (it.start || 0) - 1, hi = it.end ?? Infinity;
+    const chs = (info?.chapters || []).filter(c => c.t >= lo && c.t < hi)
+      .map(c => ({ ...c, end: it.end != null && (c.end == null || c.end > it.end) ? it.end : c.end }));
+    if (chs.length < 2) { toast('이 구간에는 나눌 챕터가 없어요'); return; }
+    items.splice(i, 1, ...chs.map(c => ({ vid: it.vid, label: c.title, start: c.t, end: c.end, sets: it.sets, rest: it.rest, dur: info.dur })));
+    saveDraft(); renderList();
+    toast(`${chs.length}개 구간으로 나눴어요`);
+  } catch (e) { apiError(e); }
+}
+
+/* ---------- 저장/공유 ---------- */
+function savedAll() { return store.get('hometube.routines', {}); }
+function renderSaved(select) {
+  const sel = $('#savedSel'), all = savedAll();
+  sel.innerHTML = '<option value="">— 불러오기 —</option>' +
+    Object.keys(all).map(n => `<option>${n.replace(/</g, '&lt;')}</option>`).join('');
+  if (select) sel.value = select;
+}
+function encodeRoutine() {
+  const compact = items.map(it => [it.vid, it.label, it.start || 0, it.end ?? null, it.sets, it.rest]);
+  const json = JSON.stringify({ n: $('#routineName').value.trim(), i: compact });
+  return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeRoutine(s) {
+  try {
+    const json = decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
+    const o = JSON.parse(json);
+    return { name: o.n || '', items: o.i.map(a => ({ vid: a[0], label: a[1], start: a[2], end: a[3], sets: a[4], rest: a[5], dur: null })) };
+  } catch { return null; }
+}
+
+/* ---------- 플레이어 ---------- */
+let p1, p2, p1Ready = false, p2Ready = false;
+let mode = 'idle';            // idle | preview | routine
+let queue = [], qi = -1;
+let seenPlaying = false, segStartedAt = 0;
+let restEndAt = 0, restTimer = null, lastBeep = null;
+let workSec = 0, lastTick = 0;
+let rate = 1, wakeLock = null;
+
+window.onYouTubeIframeAPIReady = () => {
+  const vars = { playsinline: 1, rel: 0, modestbranding: 1 };
+  p1 = new YT.Player('player1', {
+    playerVars: vars,
+    events: {
+      onReady: () => { p1Ready = true; p1.setVolume(+$('#vol1').value); },
+      onStateChange: onState1,
+      onError: e => {
+        const msg = { 2: '잘못된 영상 ID', 5: 'HTML5 재생 오류', 100: '영상이 없거나 비공개', 101: '임베드가 막힌 영상', 150: '임베드가 막힌 영상' }[e.data] || '재생 오류';
+        toast(msg + (mode === 'routine' ? ' → 다음으로 건너뜁니다' : ''));
+        if (mode === 'routine') setTimeout(() => goto(qi + 1), 1500);
+      },
+    },
+  });
+  p2 = new YT.Player('player2', {
+    playerVars: vars,
+    events: {
+      onReady: () => { p2Ready = true; p2.setVolume(+$('#vol2').value); },
+      onStateChange: e => {
+        if (e.data === YT.PlayerState.ENDED && $('#subLoop').classList.contains('on')) { p2.seekTo(0); p2.playVideo(); }
+      },
+    },
+  });
+};
+
+function currentVid() { try { return p1.getVideoData().video_id; } catch { return null; } }
+function currentItem() {
+  if (mode === 'routine' && queue[qi]) return items[queue[qi].idx];
+  if (mode === 'preview') return items.find(it => it.vid === currentVid());
+  return null;
+}
+
+function onState1(e) {
+  const S = YT.PlayerState;
+  $('#placeholder').hidden = true;
+  $('#btnPlay').textContent = e.data === S.PLAYING ? '❚❚' : '▶';
+  if (e.data === S.PLAYING) {
+    seenPlaying = true; $('#tapHint').hidden = true;
+    if (p1.getPlaybackRate() !== rate) p1.setPlaybackRate(rate);
+    const it = currentItem();
+    if (it && !it.dur) { const d = p1.getDuration(); if (d) { it.dur = Math.floor(d); saveDraft(); renderList(); } }
+  }
+  if (e.data === S.ENDED && mode === 'routine' && queue[qi]?.type === 'video' && seenPlaying) goto(qi + 1);
+}
+
+function buildQueue() {
+  queue = [];
+  items.forEach((it, i) => {
+    for (let s = 1; s <= it.sets; s++) {
+      queue.push({ type: 'video', idx: i, set: s });
+      const last = i === items.length - 1 && s === it.sets;
+      if (it.rest > 0 && !last) queue.push({ type: 'rest', sec: it.rest, idx: i, set: s });
+    }
+  });
+}
+
+function startRoutine(fromItem = 0) {
+  if (!items.length) { toast('먼저 구간을 추가하세요'); return; }
+  if (!p1Ready) { toast('플레이어 준비 중… 잠시 후 다시 눌러주세요'); return; }
+  mode = 'routine'; workSec = 0;
+  buildQueue();
+  $('#doneOverlay').hidden = true;
+  goto(queue.findIndex(q => q.type === 'video' && q.idx === fromItem));
+  try { navigator.wakeLock?.request('screen').then(l => wakeLock = l).catch(() => {}); } catch {}
+}
+
+function goto(n) {
+  stopRest(); $('#tapHint').hidden = true;
+  if (n < 0) n = 0;
+  if (n >= queue.length) { finish(); return; }
+  qi = n;
+  const q = queue[n];
+  if (q.type === 'video') {
+    const it = items[q.idx];
+    seenPlaying = false; segStartedAt = performance.now();
+    const opts = { videoId: it.vid, startSeconds: it.start || 0 };
+    if (it.end != null) opts.endSeconds = it.end;
+    p1.loadVideoById(opts);
+  } else {
+    p1.pauseVideo();
+    startRest(q.sec);
+  }
+  renderList();
+}
+
+function nextItemLabel(fromQ) {
+  const nq = queue.slice(fromQ + 1).find(q => q.type === 'video');
+  if (!nq) return '마지막';
+  const it = items[nq.idx];
+  return `<b>${escapeHtml(it.label)}</b>` + (it.sets > 1 ? ` (세트 ${nq.set}/${it.sets})` : '');
+}
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function startRest(sec) {
+  restEndAt = performance.now() + sec * 1000; lastBeep = null;
+  $('#restOverlay').hidden = false;
+  $('#restNext').innerHTML = '다음: ' + nextItemLabel(qi);
+  tickRest();
+  restTimer = setInterval(tickRest, 200);
+}
+function tickRest() {
+  const left = Math.ceil((restEndAt - performance.now()) / 1000);
+  $('#restNum').textContent = Math.max(0, left);
+  if (left <= 3 && left >= 1 && lastBeep !== left) { lastBeep = left; beep(660, .12); }
+  if (left <= 0) { beep(990, .35); goto(qi + 1); }
+}
+function stopRest() { clearInterval(restTimer); restTimer = null; $('#restOverlay').hidden = true; }
+
+function finish() {
+  mode = 'idle'; stopRest(); try { p1.pauseVideo(); } catch {}
+  $('#doneText').textContent = `실제 운동 시간 ${fmt(workSec)} · 수고하셨어요!`;
+  $('#doneOverlay').hidden = false;
+  beep(880, .2); setTimeout(() => beep(1175, .4), 220);
+  try { wakeLock?.release(); } catch {} wakeLock = null;
+  qi = -1; renderList(); updateNow();
+}
+
+function preview(i) {
+  if (!p1Ready) { toast('플레이어 준비 중…'); return; }
+  const it = items[i];
+  mode = 'preview'; stopRest(); $('#doneOverlay').hidden = true;
+  p1.loadVideoById({ videoId: it.vid, startSeconds: it.start || 0 });
+  renderList();
+}
+
+let actx;
+function beep(freq, dur) {
+  try {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = 'sine';
+    g.gain.setValueAtTime(.25, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + dur);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + dur);
+  } catch {}
+}
+
+/* 진행 표시 + 끝 시간 보정(폴링) */
+function updateNow() {
+  const it = currentItem();
+  if (!it) {
+    $('#nowTitle').textContent = mode === 'idle' && qi < 0 ? '대기 중' : '';
+    $('#nowMeta').textContent = ''; $('#segBar').style.width = '0'; $('#allBar').style.width = '0';
+    return;
+  }
+  const q = queue[qi];
+  if (mode === 'routine' && q.type === 'rest') {
+    $('#nowTitle').textContent = '휴식 중';
+  } else {
+    $('#nowTitle').textContent = (mode === 'preview' ? '[미리보기] ' : '') + it.label;
+  }
+  let cur = 0;
+  try { cur = p1.getCurrentTime() || 0; } catch {}
+  const start = it.start || 0, end = it.end ?? it.dur;
+  const pos = Math.max(0, cur - start), len = end ? end - start : null;
+  let meta = mode === 'preview' ? fmt(cur) : fmt(pos) + (len ? ' / ' + fmt(len) : '');
+  if (mode === 'routine') {
+    if (it.sets > 1) meta = `세트 ${q.set}/${it.sets} · ` + meta;
+    const vids = queue.filter(x => x.type === 'video').length;
+    const done = queue.slice(0, qi).filter(x => x.type === 'video').length;
+    meta = `${done + (q.type === 'video' ? 1 : 0)}/${vids} · ` + meta;
+    $('#allBar').style.width = (qi / queue.length * 100) + '%';
+  } else $('#allBar').style.width = '0';
+  $('#nowMeta').textContent = meta;
+  $('#segBar').style.width = len && q?.type !== 'rest' ? Math.min(100, pos / len * 100) + '%' : '0';
+}
+
+setInterval(() => {
+  if (!p1Ready) return;
+  const now = performance.now();
+  const playing = p1.getPlayerState?.() === YT.PlayerState.PLAYING;
+  if (mode === 'routine' && playing && lastTick) workSec += (now - lastTick) / 1000;
+  lastTick = now;
+  // 모바일 브라우저가 자동재생을 막으면 영상을 직접 탭하도록 안내
+  if (mode === 'routine' && queue[qi]?.type === 'video' && !seenPlaying && now - segStartedAt > 3000
+      && p1.getPlayerState() !== YT.PlayerState.BUFFERING) $('#tapHint').hidden = false;
+  if (mode === 'routine' && queue[qi]?.type === 'video' && playing && seenPlaying && now - segStartedAt > 1500) {
+    const it = items[queue[qi].idx];
+    if (it.end != null && currentVid() === it.vid && p1.getCurrentTime() >= it.end - .25) goto(qi + 1);
+  }
+  updateNow();
+}, 250);
+
+/* ---------- 컨트롤 ---------- */
+function togglePlay() {
+  if (!p1Ready) return;
+  if (mode === 'routine' && queue[qi]?.type === 'rest') { goto(qi + 1); return; }
+  if (mode === 'idle' && qi < 0 && currentVid() == null) { startRoutine(0); return; }
+  p1.getPlayerState() === YT.PlayerState.PLAYING ? p1.pauseVideo() : p1.playVideo();
+}
+function prev() {
+  if (mode !== 'routine') return;
+  const cur = queue[qi];
+  // 영상 재생 3초 이후면 현재 구간 처음으로, 아니면 이전 영상 구간으로
+  if (cur?.type === 'video' && p1.getCurrentTime() - (items[cur.idx].start || 0) > 3) { goto(qi); return; }
+  for (let j = qi - 1; j >= 0; j--) if (queue[j].type === 'video') { goto(j); return; }
+  goto(qi);
+}
+function next() { if (mode === 'routine') goto(qi + 1); }
+function toggleMirror() {
+  const on = $('#mainWrap').classList.toggle('mirror');
+  $('#btnMirror').classList.toggle('on', on);
+  store.set('hometube.mirror', on);
+}
+function toggleFull() {
+  if (document.fullscreenElement) { document.exitFullscreen(); return; }
+  $('#players').requestFullscreen?.()
+    .then(() => screen.orientation?.lock?.('landscape').catch(() => {}))
+    .catch(() => {});
+}
+if (!document.fullscreenEnabled) $('#btnFull').hidden = true;
+
+$('#btnPlay').onclick = togglePlay;
+$('#btnPrev').onclick = prev;
+$('#btnNext').onclick = next;
+$('#btnMirror').onclick = toggleMirror;
+$('#btnFull').onclick = toggleFull;
+$('#rate').onchange = e => { rate = +e.target.value; try { p1.setPlaybackRate(rate); } catch {} };
+$('#vol1').oninput = e => { try { p1.setVolume(+e.target.value); } catch {} };
+$('#vol2').oninput = e => { try { p2.setVolume(+e.target.value); } catch {} };
+$('#restSkip').onclick = () => goto(qi + 1);
+$('#restAdd').onclick = () => { restEndAt += 10000; tickRest(); };
+$('#doneAgain').onclick = () => startRoutine(0);
+$('#btnStart').onclick = () => startRoutine(0);
+$('#btnAdd').onclick = addItem;
+['#addUrl', '#addLabel', '#addStart', '#addEnd'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); }));
+let chTimer;
+$('#addUrl').addEventListener('input', () => {
+  const p = parseYouTube($('#addUrl').value);
+  if (p?.t && !$('#addStart').value) $('#addStart').value = fmt(p.t);
+  renderLinkPreview(p);
+  clearTimeout(chTimer);
+  chTimer = setTimeout(() => showChapters(p?.vid), 400);
+});
+$('#lpClear').onclick = () => {
+  $('#addUrl').value = ''; $('#addStart').value = '';
+  $('#addUrl').dispatchEvent(new Event('input')); $('#addUrl').focus();
+};
+$('#btnSearch').onclick = search;
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+$('#chAdd').onclick = addChapters;
+$('#chToggle').onclick = () => {
+  const boxes = [...$('#chList').querySelectorAll('input')], all = boxes.every(b => b.checked);
+  boxes.forEach(b => b.checked = !all);
+  $('#chToggle').textContent = all ? '전체 선택' : '전체 해제';
+};
+
+$('#btnSettings').onclick = () => { $('#apiKey').value = store.get('hometube.apiKey', ''); $('#settings').showModal(); };
+$('#apiClose').onclick = () => $('#settings').close();
+$('#apiSave').onclick = () => {
+  store.set('hometube.apiKey', $('#apiKey').value.trim());
+  $('#settings').close(); toast(apiKey() ? 'API 키 설정됨' : 'API 키 없음 — 검색·챕터 기능이 꺼져요');
+};
+$('#apiTest').onclick = async () => {
+  const typed = $('#apiKey').value.trim(), prev = store.get('hometube.apiKey', '');
+  if (typed) store.set('hometube.apiKey', typed);
+  try { await yt('videos', { part: 'id', id: 'dQw4w9WgXcQ' }); toast('✅ 연결 성공'); }
+  catch (e) { apiError(e); }
+  finally { if (typed) store.set('hometube.apiKey', prev); }
+};
+
+const isMobile = () => matchMedia('(max-width: 900px), (max-height: 520px) and (pointer: coarse)').matches;
+function openSheet() {
+  if (!isMobile()) { $('#addUrl').focus(); return; }
+  $('#addSheet').classList.add('open'); $('#sheetBackdrop').classList.add('open');
+}
+function closeSheet() { $('#addSheet').classList.remove('open'); $('#sheetBackdrop').classList.remove('open'); }
+$('#fab').onclick = openSheet;
+$('#sheetClose').onclick = closeSheet;
+$('#sheetBackdrop').onclick = closeSheet;
+
+const findYouTubeUrl = text => (String(text).match(/(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)\/\S+/i) || [])[0];
+$('#btnPaste').onclick = async () => {
+  try {
+    const url = findYouTubeUrl(await navigator.clipboard.readText());
+    if (!url) { toast('클립보드에 유튜브 링크가 없어요'); return; }
+    $('#addUrl').value = url; $('#addUrl').dispatchEvent(new Event('input'));
+  } catch { toast('붙여넣기 권한이 없어요. 입력칸을 길게 눌러 붙여넣으세요'); }
+};
+
+let installEvt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#btnInstall').hidden = false; });
+$('#btnInstall').onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt(); await installEvt.userChoice.catch(() => {});
+  installEvt = null; $('#btnInstall').hidden = true;
+};
+
+$('#btnDual').onclick = () => {
+  const on = $('#subWrap').hidden;
+  $('#subWrap').hidden = !on; $('#subCtl').hidden = !on;
+  $('#players').classList.toggle('dual', on);
+  $('#btnDual').classList.toggle('on', on);
+  store.set('hometube.dual', on);
+};
+$('#subLoad').onclick = () => {
+  const p = parseYouTube($('#subUrl').value);
+  if (!p) { toast('유튜브 링크를 확인해주세요'); return; }
+  if (!p2Ready) { toast('플레이어 준비 중…'); return; }
+  p2.loadVideoById({ videoId: p.vid, startSeconds: p.t || 0 });
+  $('#subWrap .placeholder').hidden = true;
+  store.set('hometube.sub', $('#subUrl').value);
+};
+$('#subUrl').addEventListener('keydown', e => { if (e.key === 'Enter') $('#subLoad').click(); });
+$('#subLoop').onclick = e => e.currentTarget.classList.toggle('on');
+$('#subPlay').onclick = () => { if (p2Ready) p2.getPlayerState() === YT.PlayerState.PLAYING ? p2.pauseVideo() : p2.playVideo(); };
+
+$('#btnSave').onclick = () => {
+  const name = $('#routineName').value.trim();
+  if (!name) { toast('루틴 이름을 입력하세요'); return; }
+  if (!items.length) { toast('저장할 구간이 없어요'); return; }
+  const all = savedAll(); all[name] = items; store.set('hometube.routines', all);
+  renderSaved(name); toast(`"${name}" 저장됨`);
+};
+$('#savedSel').onchange = e => {
+  const name = e.target.value; if (!name) return;
+  items = structuredClone(savedAll()[name] || []);
+  $('#routineName').value = name;
+  mode = 'idle'; qi = -1; saveDraft(); renderList();
+};
+$('#btnDel').onclick = () => {
+  const name = $('#savedSel').value; if (!name) return;
+  if (!confirm(`"${name}" 루틴을 삭제할까요?`)) return;
+  const all = savedAll(); delete all[name]; store.set('hometube.routines', all);
+  renderSaved(); toast('삭제됨');
+};
+$('#btnShare').onclick = async () => {
+  if (!items.length) { toast('공유할 구간이 없어요'); return; }
+  const url = location.href.split('#')[0] + '#r=' + encodeRoutine();
+  try { await navigator.clipboard.writeText(url); toast('공유 링크가 복사됐어요'); }
+  catch { prompt('이 링크를 복사하세요', url); }
+};
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); togglePlay(); }
+  else if (k === 'n') next();
+  else if (k === 'p') prev();
+  else if (k === 'm') toggleMirror();
+  else if (k === 'f') toggleFull();
+});
+
+/* ---------- 초기화 ---------- */
+(function init() {
+  const m = location.hash.match(/#r=([\w-]+)/);
+  const shared = m && decodeRoutine(m[1]);
+  if (shared) {
+    items = shared.items; $('#routineName').value = shared.name;
+    history.replaceState(null, '', location.pathname + location.search);
+    toast('공유받은 루틴을 불러왔어요' + (shared.name ? `: ${shared.name}` : ''));
+  } else {
+    items = store.get('hometube.draft', []);
+  }
+  // 유튜브 앱 → 공유 → 이 앱 으로 들어온 경우 (?url=, ?text=)
+  const qs = new URLSearchParams(location.search);
+  const sharedUrl = findYouTubeUrl([qs.get('url'), qs.get('text'), qs.get('title')].filter(Boolean).join(' '));
+  if (sharedUrl) {
+    history.replaceState(null, '', location.pathname);
+    $('#addUrl').value = sharedUrl; $('#addUrl').dispatchEvent(new Event('input'));
+    setTimeout(openSheet, 100);
+  }
+  renderSaved(); renderList();
+  if (store.get('hometube.mirror', false)) toggleMirror();
+  if (store.get('hometube.dual', false)) $('#btnDual').click();
+  $('#subUrl').value = store.get('hometube.sub', '');
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
